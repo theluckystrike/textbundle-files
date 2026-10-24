@@ -1,6 +1,6 @@
 {
 	"name": "textbundle-files",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"private": true,
 	"description": "Imports TextBundle and TextPack files as notes with their images, and exports a note as a TextPack.",
 	"main": "main.js",

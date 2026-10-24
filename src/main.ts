@@ -5,7 +5,7 @@ import { setupHello } from './hello/index';
 import WHATS_NEW from './whats-new.json';
 import { SPONSORS, bindPro, isPro, resetPro } from './pro';
 import { DEFAULT_SETTINGS, TextbundleFilesSettingTab, keepInfoActive, normalizeSettings, type TextbundleFilesSettings } from './settings';
-import { exportedByPlugin, readPack, uniquePath, type Bundle } from './bundle';
+import { PackError, exportedByPlugin, readPack, uniquePath, type Bundle } from './bundle';
 import { count, exportNote, importSummary, notesIn, packsIn, readVaultBundle, readVaultPack, reportText, writeBundle, type ExportResult, type ImportResult } from './writer';
 import { ImportModal } from './modal';
 
@@ -13,6 +13,8 @@ import { ImportModal } from './modal';
 const STABLE_MS = 500;
 const STABLE_TRIES = 20;
 const RETRY_MS = 2000;
+/** A refused auto import waits this long for a 'modify' event (a sync still writes the pack) before it shows its Notice. */
+const REFUSED_WAIT_MS = 60_000;
 /** How many written pack paths the settings keep. */
 const WRITTEN_KEEP = 500;
 /** How often to ask the license state whether a check is due. It sends a request only when signed in and due (7 days). */
@@ -37,6 +39,8 @@ export interface FolderReport {
 }
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
+/** True for the refusal of a file with no zip end record. A writer adds the end record last, so the pack may still be incomplete. */
+const incomplete = (error: unknown) => error instanceof PackError && error.message.endsWith(' is not a TextPack (zip) file.');
 
 export default class TextbundleFilesPlugin extends Plugin {
 	settings: TextbundleFilesSettings = { ...DEFAULT_SETTINGS };
@@ -47,6 +51,10 @@ export default class TextbundleFilesPlugin extends Plugin {
 	private own = new Set<string>();
 	/** Auto imports that wait for a stable file size. */
 	private waiting = new Set<string>();
+	/** Auto imports refused with a PackError: the file size at the refusal and the 60 s Notice timer. */
+	private refused = new Map<string, { size: number; timer: number }>();
+	/** Set in onunload, so an auto import that ends after unload sets no timer. */
+	private unloaded = false;
 	/** One write at a time, so two imports never pick the same free name. */
 	private queue: Promise<unknown> = Promise.resolve();
 
@@ -95,12 +103,17 @@ export default class TextbundleFilesPlugin extends Plugin {
 		this.app.workspace.onLayoutReady(() => {
 			// After layout ready, so the files that exist at start do not import.
 			this.registerEvent(this.app.vault.on('create', (file) => this.onCreate(file)));
+			this.registerEvent(this.app.vault.on('modify', (file) => this.onModify(file)));
+			this.registerEvent(this.app.vault.on('delete', (file) => this.forgetRefused(file.path)));
+			this.registerEvent(this.app.vault.on('rename', (_file, oldPath) => this.forgetRefused(oldPath)));
 			void pro.refresh();
 			this.registerInterval(window.setInterval(() => void pro.refresh(), PRO_TICK_MS));
 		});
 	}
 
 	onunload(): void {
+		this.unloaded = true;
+		for (const path of [...this.refused.keys()]) this.forgetRefused(path);
 		this.modal?.close();
 		resetPro();
 	}
@@ -220,8 +233,28 @@ export default class TextbundleFilesPlugin extends Plugin {
 		void this.autoImport(file.path);
 	}
 
-	/** Waits until a copy or a sync client has written the whole pack, then imports it. One retry after a read error. */
-	async autoImport(path: string): Promise<ImportResult | null> {
+	/** A refused pack that changes size (a sync still writes it) gets one more auto import. */
+	onModify(file: TAbstractFile): void {
+		if (!this.settings.autoImport) return;
+		const entry = this.refused.get(file.path);
+		if (!entry || !(file instanceof TFile) || file.stat.size === entry.size) return;
+		this.forgetRefused(file.path);
+		void this.autoImport(file.path, true);
+	}
+
+	/** Drops a refused pack and its Notice timer (on success, delete, rename and unload). */
+	forgetRefused(path: string): void {
+		const entry = this.refused.get(path);
+		if (!entry) return;
+		window.clearTimeout(entry.timer);
+		this.refused.delete(path);
+	}
+
+	/**
+	 * Waits until a copy or a sync client has written the whole pack, then imports it. One retry after a read error.
+	 * A pack refused on the first try waits for one 'modify' event with a new size; its Notice shows after the second try fails or after 60 s.
+	 */
+	async autoImport(path: string, again = false): Promise<ImportResult | null> {
 		this.waiting.add(path);
 		const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 		try {
@@ -245,7 +278,9 @@ export default class TextbundleFilesPlugin extends Plugin {
 				let bundle: Bundle;
 				try {
 					bundle = await read();
-				} catch {
+				} catch (error) {
+					// A refused pack (bad zip, bomb, unsafe path) gives the same result in 2 s. Only a read error is retried.
+					if (error instanceof PackError) throw error;
 					await wait(RETRY_MS);
 					bundle = await read();
 				}
@@ -256,10 +291,25 @@ export default class TextbundleFilesPlugin extends Plugin {
 				}
 				return writeBundle(this.app, bundle, path, folder, keepInfoActive(this.settings, isPro()), (written) => this.remember(written));
 			});
+			this.forgetRefused(path);
 			if (!result) return null;
 			new Notice(`Imported ${result.notePath} with ${count(result.assets, 'attachment')}.`);
 			return result;
 		} catch (error) {
+			const file = this.app.vault.getFileByPath(path);
+			if (this.unloaded) return null;
+			// Only "not a TextPack (zip) file" (no zip end record) can mean a pack that a writer has not finished.
+			// Every other refusal (bomb, unsafe path, limit, no text file) shows its Notice at once.
+			if (incomplete(error) && !again && file) {
+				// The pack may still be syncing. Wait for its next 'modify' event, and show the Notice only if none comes in 60 s.
+				this.forgetRefused(path);
+				const timer = window.setTimeout(() => {
+					this.refused.delete(path);
+					new Notice(`${path} was not imported. ${message(error)}`);
+				}, REFUSED_WAIT_MS);
+				this.refused.set(path, { size: file.stat.size, timer });
+				return null;
+			}
 			new Notice(`${path} was not imported. ${message(error)}`);
 			return null;
 		} finally {
