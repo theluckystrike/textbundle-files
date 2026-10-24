@@ -1,8 +1,11 @@
 {
 	"id": "textbundle-files",
 	"name": "TextBundle Files",
-	"version": "1.0.0",
-	"changes": [],
+	"version": "1.0.1",
+	"changes": [
+		"Auto import now handles one pack at a time.",
+		"A sync that adds many large packs keeps only one pack in memory."
+	],
 	"tip": "On desktop, you can drop .textpack files and .textbundle folders on the import window. To send a note to Bear, Ulysses or iA Writer, use Export current note as TextPack.",
 	"thanks": "Hi, I am Michael, a solo developer in Poland. TextBundle Files is one of over 100 small plugins that I make. Thank you for trusting it with your notes.",
 	"related": [

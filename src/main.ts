@@ -233,24 +233,30 @@ export default class TextbundleFilesPlugin extends Plugin {
 				if (file.stat.size === size && size > 0) break;
 				size = file.stat.size;
 			}
-			let bundle: Bundle;
-			const read = async () => {
-				const file = this.app.vault.getFileByPath(path);
-				if (!file) throw new Error('The pack is gone.');
-				return readVaultPack(this.app, file);
-			};
-			try {
-				bundle = await read();
-			} catch {
-				await wait(RETRY_MS);
-				bundle = await read();
-			}
-			// A pack that this plugin exported (on any device) does not come back as a note.
-			if (exportedByPlugin(bundle.info, bundle.text)) {
-				new Notice(`Skipped ${path}: TextBundle Files exported this pack, and its text did not change. To import it, use "${UI.importPack}" in its file menu.`);
-				return null;
-			}
-			const result = await this.importBundle(bundle, path, path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '');
+			const folder = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+			// One auto import at a time: the read, the unpack and the write run in the queue,
+			// so a sync that adds many large packs never holds their bundles in memory together.
+			const result = await this.serial(async (): Promise<ImportResult | null> => {
+				const read = async () => {
+					const file = this.app.vault.getFileByPath(path);
+					if (!file) throw new Error('The pack is gone.');
+					return readVaultPack(this.app, file);
+				};
+				let bundle: Bundle;
+				try {
+					bundle = await read();
+				} catch {
+					await wait(RETRY_MS);
+					bundle = await read();
+				}
+				// A pack that this plugin exported (on any device) does not come back as a note.
+				if (exportedByPlugin(bundle.info, bundle.text)) {
+					new Notice(`Skipped ${path}: TextBundle Files exported this pack, and its text did not change. To import it, use "${UI.importPack}" in its file menu.`);
+					return null;
+				}
+				return writeBundle(this.app, bundle, path, folder, keepInfoActive(this.settings, isPro()), (written) => this.remember(written));
+			});
+			if (!result) return null;
 			new Notice(`Imported ${result.notePath} with ${count(result.assets, 'attachment')}.`);
 			return result;
 		} catch (error) {
