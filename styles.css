@@ -1,0 +1,52 @@
+/* Styles for TextBundle Files. Obsidian loads this file while the plugin is enabled. */
+
+/* NoteMods What's new tab and settings card */
+.notemods-hello {
+	overflow-y: auto;
+}
+
+.notemods-hello-page {
+	max-width: var(--file-line-width);
+	margin: 0 auto;
+	padding: var(--size-4-6) var(--size-4-4);
+}
+
+.notemods-hello-sub,
+.notemods-hello-blurb {
+	color: var(--text-muted);
+}
+
+.notemods-hello-buttons .setting-item-control {
+	flex-wrap: wrap;
+	justify-content: flex-start;
+}
+
+/* Import window */
+.textbundle-files-hidden {
+	display: none;
+}
+
+.textbundle-files-drop {
+	padding: var(--size-4-6) var(--size-4-4);
+	border: 2px dashed var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	text-align: center;
+	color: var(--text-muted);
+}
+
+.textbundle-files-drop.is-over {
+	border-color: var(--interactive-accent);
+	color: var(--text-normal);
+}
+
+.textbundle-files-results li {
+	margin-bottom: var(--size-4-2);
+}
+
+.textbundle-files-warning {
+	color: var(--text-muted);
+}
+
+.textbundle-files-error {
+	color: var(--text-error);
+}

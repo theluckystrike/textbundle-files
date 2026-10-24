@@ -1,0 +1,1233 @@
+{
+ "slug": "textbundle-files",
+ "module": "textbundle-files/src/bundle",
+ "function": "bundleFromFiles",
+ "note": "Each case names its function in fn. bundle(fileName, files) and pack(fileName, files) take text file contents; the test encodes them as UTF-8 (pack also zips them with fflate) and gives {name, textName, text, type, markdown, assets, warnings}. rewriteImportLinks(text, assetPath to vaultPath), exportLinks(text, link target to vaultPath), roundTrip(text, assetPath to vaultPath) runs import then export with the reverse map. infoRoundTrip(text, info) gives the stored text and the result of takeInfoProperty. Names that start with A and a number are acceptance cases of SPEC.md. Reviewed by hand against each input.",
+ "cases": [
+  {
+   "name": "A1 pack with text.markdown, info.json and assets gives note name, text and asset list",
+   "fn": "bundle",
+   "args": [
+    "Trip notes.textpack",
+    {
+     "info.json": "{\"version\":2,\"type\":\"net.daringfireball.markdown\",\"creatorIdentifier\":\"net.shinyfrog.bear\"}",
+     "text.markdown": "# Trip\n\n![](assets/map.png)\n",
+     "assets/map.png": "PNG"
+    }
+   ],
+   "expected": {
+    "name": "Trip notes",
+    "textName": "text.markdown",
+    "text": "# Trip\n\n![](assets/map.png)\n",
+    "type": "net.daringfireball.markdown",
+    "markdown": true,
+    "assets": [
+     "map.png"
+    ],
+    "warnings": []
+   }
+  },
+  {
+   "name": "A1 import rewrites an image link to the vault attachment path",
+   "fn": "rewriteImportLinks",
+   "args": [
+    "# Trip\n\n![](assets/map.png)\n",
+    {
+     "map.png": "Attachments/map.png"
+    }
+   ],
+   "expected": {
+    "text": "# Trip\n\n![](Attachments/map.png)\n",
+    "rewritten": 1,
+    "missing": 0
+   }
+  },
+  {
+   "name": "A2 text.md inside one top folder Name.textbundle is found",
+   "fn": "bundle",
+   "args": [
+    "Ulysses sheet.textpack",
+    {
+     "Ulysses sheet.textbundle/info.json": "{\"version\":2}",
+     "Ulysses sheet.textbundle/text.md": "Hello",
+     "Ulysses sheet.textbundle/assets/a.jpg": "J"
+    }
+   ],
+   "expected": {
+    "name": "Ulysses sheet",
+    "textName": "text.md",
+    "text": "Hello",
+    "type": "net.daringfireball.markdown",
+    "markdown": true,
+    "assets": [
+     "a.jpg"
+    ],
+    "warnings": []
+   }
+  },
+  {
+   "name": "A2 text.markdown wins over text.md and the bundle warns",
+   "fn": "bundle",
+   "args": [
+    "Two.textbundle",
+    {
+     "text.md": "md",
+     "text.markdown": "markdown",
+     "info.json": "{\"version\":2}"
+    }
+   ],
+   "expected": {
+    "name": "Two",
+    "textName": "text.markdown",
+    "text": "markdown",
+    "type": "net.daringfireball.markdown",
+    "markdown": true,
+    "assets": [],
+    "warnings": [
+     "The bundle has 2 text files. Imported text.markdown."
+    ]
+   }
+  },
+  {
+   "name": "A2 no text file refuses the bundle",
+   "fn": "bundle",
+   "args": [
+    "Empty.textpack",
+    {
+     "info.json": "{\"version\":2}",
+     "assets/a.png": "x"
+    }
+   ],
+   "expected": {
+    "error": "No text file (text.markdown or text.md) in the bundle."
+   }
+  },
+  {
+   "name": "A2 __MACOSX and .DS_Store entries are ignored",
+   "fn": "bundle",
+   "args": [
+    "Mac.textpack",
+    {
+     "__MACOSX/Mac.textbundle/._text.markdown": "junk",
+     "Mac.textbundle/.DS_Store": "junk",
+     "Mac.textbundle/text.markdown": "Body",
+     "Mac.textbundle/info.json": "{\"version\":2}"
+    }
+   ],
+   "expected": {
+    "name": "Mac",
+    "textName": "text.markdown",
+    "text": "Body",
+    "type": "net.daringfireball.markdown",
+    "markdown": true,
+    "assets": [],
+    "warnings": []
+   }
+  },
+  {
+   "name": "A3 missing info.json gives version 2 and the Markdown type",
+   "fn": "parseInfo",
+   "args": [
+    null
+   ],
+   "expected": {
+    "info": {
+     "version": 2,
+     "type": "net.daringfireball.markdown",
+     "raw": null
+    },
+    "warning": "No info.json. Used the Markdown type."
+   }
+  },
+  {
+   "name": "A3 bad info.json JSON gives the defaults and a warning",
+   "fn": "parseInfo",
+   "args": [
+    "{version: 2"
+   ],
+   "expected": {
+    "info": {
+     "version": 2,
+     "type": "net.daringfireball.markdown",
+     "raw": null
+    },
+    "warning": "info.json is not valid JSON. Used the Markdown type."
+   }
+  },
+  {
+   "name": "A3 version 1 info.json without type defaults to Markdown",
+   "fn": "parseInfo",
+   "args": [
+    "{\"version\":1,\"transient\":true}"
+   ],
+   "expected": {
+    "info": {
+     "version": 1,
+     "type": "net.daringfireball.markdown",
+     "raw": {
+      "version": 1,
+      "transient": true
+     }
+    },
+    "warning": null
+   }
+  },
+  {
+   "name": "A3 pack without info.json still imports with a warning",
+   "fn": "bundle",
+   "args": [
+    "Bare.textpack",
+    {
+     "text.markdown": "x"
+    }
+   ],
+   "expected": {
+    "name": "Bare",
+    "textName": "text.markdown",
+    "text": "x",
+    "type": "net.daringfireball.markdown",
+    "markdown": true,
+    "assets": [],
+    "warnings": [
+     "No info.json. Used the Markdown type."
+    ]
+   }
+  },
+  {
+   "name": "A4 percent encoded asset name with spaces and unicode keeps its written form",
+   "fn": "rewriteImportLinks",
+   "args": [
+    "![Café](assets/caf%C3%A9%20menu.png)",
+    {
+     "café menu.png": "Attachments/café menu.png"
+    }
+   ],
+   "expected": {
+    "text": "![Café](Attachments/caf%C3%A9%20menu.png)",
+    "rewritten": 1,
+    "missing": 0
+   }
+  },
+  {
+   "name": "A4 angle bracket link with spaces stays an angle bracket link",
+   "fn": "rewriteImportLinks",
+   "args": [
+    "![](<assets/my photo 日本.jpg>)",
+    {
+     "my photo 日本.jpg": "Files/Trip/my photo 日本.jpg"
+    }
+   ],
+   "expected": {
+    "text": "![](<Files/Trip/my photo 日本.jpg>)",
+    "rewritten": 1,
+    "missing": 0
+   }
+  },
+  {
+   "name": "A4 attachment folder with a space is percent encoded",
+   "fn": "rewriteImportLinks",
+   "args": [
+    "[doc](assets/report.pdf)",
+    {
+     "report.pdf": "My files/report.pdf"
+    }
+   ],
+   "expected": {
+    "text": "[doc](My%20files/report.pdf)",
+    "rewritten": 1,
+    "missing": 0
+   }
+  },
+  {
+   "name": "A4 HTML img src is rewritten",
+   "fn": "rewriteImportLinks",
+   "args": [
+    "<img src=\"assets/a b.png\" width=\"300\">",
+    {
+     "a b.png": "Attachments/a b.png"
+    }
+   ],
+   "expected": {
+    "text": "<img src=\"Attachments/a b.png\" width=\"300\">",
+    "rewritten": 1,
+    "missing": 0
+   }
+  },
+  {
+   "name": "A4 reference definition is rewritten",
+   "fn": "rewriteImportLinks",
+   "args": [
+    "![x][img]\n\n[img]: assets/x.png\n",
+    {
+     "x.png": "Attachments/x.png"
+    }
+   ],
+   "expected": {
+    "text": "![x][img]\n\n[img]: Attachments/x.png\n",
+    "rewritten": 1,
+    "missing": 0
+   }
+  },
+  {
+   "name": "A4 a link to a missing asset stays and is counted",
+   "fn": "rewriteImportLinks",
+   "args": [
+    "![](assets/gone.png) ![](assets/here.png)",
+    {
+     "here.png": "A/here.png"
+    }
+   ],
+   "expected": {
+    "text": "![](assets/gone.png) ![](A/here.png)",
+    "rewritten": 1,
+    "missing": 1
+   }
+  },
+  {
+   "name": "A4 link with a title keeps the title",
+   "fn": "rewriteImportLinks",
+   "args": [
+    "![a](assets/a.png \"Title\")",
+    {
+     "a.png": "A/a.png"
+    }
+   ],
+   "expected": {
+    "text": "![a](A/a.png \"Title\")",
+    "rewritten": 1,
+    "missing": 0
+   }
+  },
+  {
+   "name": "A4 web links and other paths do not change",
+   "fn": "rewriteImportLinks",
+   "args": [
+    "[site](https://example.com/assets/a.png) [n](notes/assets.md)",
+    {
+     "a.png": "A/a.png"
+    }
+   ],
+   "expected": {
+    "text": "[site](https://example.com/assets/a.png) [n](notes/assets.md)",
+    "rewritten": 0,
+    "missing": 0
+   }
+  },
+  {
+   "name": "A5 note name clash adds a suffix",
+   "fn": "uniqueAmong",
+   "args": [
+    "Inbox/Trip.md",
+    [
+     "Inbox/Trip.md"
+    ]
+   ],
+   "expected": "Inbox/Trip 1.md"
+  },
+  {
+   "name": "A5 clash compare ignores case and skips taken suffixes",
+   "fn": "uniqueAmong",
+   "args": [
+    "Attachments/Map.PNG",
+    [
+     "attachments/map.png",
+     "Attachments/Map 1.PNG"
+    ]
+   ],
+   "expected": "Attachments/Map 2.PNG"
+  },
+  {
+   "name": "A5 free path is kept",
+   "fn": "uniqueAmong",
+   "args": [
+    "Attachments/new.png",
+    [
+     "Attachments/old.png"
+    ]
+   ],
+   "expected": "Attachments/new.png"
+  },
+  {
+   "name": "A5 renamed asset gets an encoded new name in the link",
+   "fn": "rewriteImportLinks",
+   "args": [
+    "![](assets/map.png)",
+    {
+     "map.png": "Attachments/map 1.png"
+    }
+   ],
+   "expected": {
+    "text": "![](Attachments/map%201.png)",
+    "rewritten": 1,
+    "missing": 0
+   }
+  },
+  {
+   "name": "A5 name without extension gets the suffix at the end",
+   "fn": "uniqueAmong",
+   "args": [
+    "README",
+    [
+     "README"
+    ]
+   ],
+   "expected": "README 1"
+  },
+  {
+   "name": "A6 nested asset folders are listed with their path below assets",
+   "fn": "bundle",
+   "args": [
+    "Deep.textbundle",
+    {
+     "text.markdown": "![](assets/img/2024/a.png)",
+     "assets/img/2024/a.png": "A",
+     "assets/b.png": "B"
+    }
+   ],
+   "expected": {
+    "name": "Deep",
+    "textName": "text.markdown",
+    "text": "![](assets/img/2024/a.png)",
+    "type": "net.daringfireball.markdown",
+    "markdown": true,
+    "assets": [
+     "b.png",
+     "img/2024/a.png"
+    ],
+    "warnings": [
+     "No info.json. Used the Markdown type."
+    ]
+   }
+  },
+  {
+   "name": "A6 nested asset link points to the flat vault file",
+   "fn": "rewriteImportLinks",
+   "args": [
+    "![](assets/img/2024/a.png)",
+    {
+     "img/2024/a.png": "Attachments/a.png"
+    }
+   ],
+   "expected": {
+    "text": "![](Attachments/a.png)",
+    "rewritten": 1,
+    "missing": 0
+   }
+  },
+  {
+   "name": "A7 parent segment is refused",
+   "fn": "checkEntryPath",
+   "args": [
+    "../evil.md"
+   ],
+   "expected": {
+    "error": "Refused the pack: the path \"../evil.md\" points outside the bundle."
+   }
+  },
+  {
+   "name": "A7 parent segment inside assets is refused",
+   "fn": "checkEntryPath",
+   "args": [
+    "Note.textbundle/assets/../../x.png"
+   ],
+   "expected": {
+    "error": "Refused the pack: the path \"Note.textbundle/assets/../../x.png\" points outside the bundle."
+   }
+  },
+  {
+   "name": "A7 absolute path is refused",
+   "fn": "checkEntryPath",
+   "args": [
+    "/etc/passwd"
+   ],
+   "expected": {
+    "error": "Refused the pack: the path \"/etc/passwd\" points outside the bundle."
+   }
+  },
+  {
+   "name": "A7 backslash parent path is refused",
+   "fn": "checkEntryPath",
+   "args": [
+    "assets\\..\\..\\x.png"
+   ],
+   "expected": {
+    "error": "Refused the pack: the path \"assets\\..\\..\\x.png\" points outside the bundle."
+   }
+  },
+  {
+   "name": "A7 drive letter is refused",
+   "fn": "checkEntryPath",
+   "args": [
+    "C:/Windows/x.png"
+   ],
+   "expected": {
+    "error": "Refused the pack: the path \"C:/Windows/x.png\" points outside the bundle."
+   }
+  },
+  {
+   "name": "A7 dot segments and double slashes are cleaned",
+   "fn": "checkEntryPath",
+   "args": [
+    "./a//assets/./x.png"
+   ],
+   "expected": "a/assets/x.png"
+  },
+  {
+   "name": "A7 a real zip with a ../ entry is refused as a whole",
+   "fn": "pack",
+   "args": [
+    "Evil.textpack",
+    {
+     "text.markdown": "hi",
+     "../outside.md": "x"
+    }
+   ],
+   "expected": {
+    "error": "Refused the pack: the path \"../outside.md\" points outside the bundle."
+   }
+  },
+  {
+   "name": "A7 a real zip pack is read",
+   "fn": "pack",
+   "args": [
+    "Good.textpack",
+    {
+     "Good.textbundle/text.markdown": "hi ![](assets/a.png)",
+     "Good.textbundle/assets/a.png": "A",
+     "Good.textbundle/info.json": "{\"version\":2,\"type\":\"net.daringfireball.markdown\"}"
+    }
+   ],
+   "expected": {
+    "name": "Good",
+    "textName": "text.markdown",
+    "text": "hi ![](assets/a.png)",
+    "type": "net.daringfireball.markdown",
+    "markdown": true,
+    "assets": [
+     "a.png"
+    ],
+    "warnings": []
+   }
+  },
+  {
+   "name": "A7 bytes that are not a zip give a clear error",
+   "fn": "notZip",
+   "args": [
+    "Broken.textpack",
+    "not a zip"
+   ],
+   "expected": {
+    "error": "Broken.textpack is not a TextPack (zip) file."
+   }
+  },
+  {
+   "name": "A8 pack over 100 MB is refused with its size",
+   "fn": "checkLimits",
+   "args": [
+    157286400,
+    1,
+    1
+   ],
+   "expected": "The pack is 150 MB. The limit is 100 MB."
+  },
+  {
+   "name": "A8 more than 5000 zip entries is refused",
+   "fn": "checkLimits",
+   "args": [
+    1000,
+    5001,
+    1000
+   ],
+   "expected": "The pack has 5001 entries. The limit is 5000 entries."
+  },
+  {
+   "name": "A8 more than 250 MB unpacked is refused",
+   "fn": "checkLimits",
+   "args": [
+    1000,
+    10,
+    262144001
+   ],
+   "expected": "The pack is 251 MB when unpacked. The limit is 250 MB."
+  },
+  {
+   "name": "A8 a pack inside the limits passes",
+   "fn": "checkLimits",
+   "args": [
+    1000,
+    10,
+    5000
+   ],
+   "expected": null
+  },
+  {
+   "name": "A9 Fountain type imports without link changes and warns",
+   "fn": "bundle",
+   "args": [
+    "Script.textbundle",
+    {
+     "text.fountain": "INT. HOUSE - DAY\n![](assets/a.png)",
+     "info.json": "{\"version\":2,\"type\":\"com.quote-unquote.fountain\"}",
+     "assets/a.png": "A"
+    }
+   ],
+   "expected": {
+    "name": "Script",
+    "textName": "text.fountain",
+    "text": "INT. HOUSE - DAY\n![](assets/a.png)",
+    "type": "com.quote-unquote.fountain",
+    "markdown": false,
+    "assets": [
+     "a.png"
+    ],
+    "warnings": [
+     "The text type is com.quote-unquote.fountain. Imported the text without link changes."
+    ]
+   }
+  },
+  {
+   "name": "A9 MultiMarkdown type counts as Markdown",
+   "fn": "bundle",
+   "args": [
+    "Mmd.textbundle",
+    {
+     "text.txt": "x",
+     "info.json": "{\"version\":2,\"type\":\"net.multimarkdown.text\"}"
+    }
+   ],
+   "expected": {
+    "name": "Mmd",
+    "textName": "text.txt",
+    "text": "x",
+    "type": "net.multimarkdown.text",
+    "markdown": true,
+    "assets": [],
+    "warnings": []
+   }
+  },
+  {
+   "name": "A10 export changes an image wikilink to assets/",
+   "fn": "exportLinks",
+   "args": [
+    "See ![[map.png]] and ![[photo 1.jpg|300]].",
+    {
+     "map.png": "Attachments/map.png",
+     "photo 1.jpg": "Attachments/photo 1.jpg"
+    }
+   ],
+   "expected": {
+    "text": "See ![](assets/map.png) and ![](assets/photo%201.jpg).",
+    "assets": [
+     {
+      "vaultPath": "Attachments/map.png",
+      "name": "map.png"
+     },
+     {
+      "vaultPath": "Attachments/photo 1.jpg",
+      "name": "photo 1.jpg"
+     }
+    ]
+   }
+  },
+  {
+   "name": "A10 export keeps links to notes and URLs",
+   "fn": "exportLinks",
+   "args": [
+    "[[Other note]] ![[Other note]] [w](https://x.org/a.png) [n](Other%20note.md)",
+    {}
+   ],
+   "expected": {
+    "text": "[[Other note]] ![[Other note]] [w](https://x.org/a.png) [n](Other%20note.md)",
+    "assets": []
+   }
+  },
+  {
+   "name": "A10 export of a file wikilink uses the alias or the name as link text",
+   "fn": "exportLinks",
+   "args": [
+    "[[spec.pdf]] and [[spec.pdf|the spec]]",
+    {
+     "spec.pdf": "Docs/spec.pdf"
+    }
+   ],
+   "expected": {
+    "text": "[spec.pdf](assets/spec.pdf) and [the spec](assets/spec.pdf)",
+    "assets": [
+     {
+      "vaultPath": "Docs/spec.pdf",
+      "name": "spec.pdf"
+     }
+    ]
+   }
+  },
+  {
+   "name": "A10 two files with one name get a suffix in assets",
+   "fn": "exportLinks",
+   "args": [
+    "![[a/x.png]] ![[b/x.png]] ![[a/x.png]]",
+    {
+     "a/x.png": "a/x.png",
+     "b/x.png": "b/x.png"
+    }
+   ],
+   "expected": {
+    "text": "![](assets/x.png) ![](assets/x%201.png) ![](assets/x.png)",
+    "assets": [
+     {
+      "vaultPath": "a/x.png",
+      "name": "x.png"
+     },
+     {
+      "vaultPath": "b/x.png",
+      "name": "x 1.png"
+     }
+    ]
+   }
+  },
+  {
+   "name": "A10 export info.json is version 2 Markdown with the plugin key and the text mark",
+   "fn": "exportInfo",
+   "args": [
+    null,
+    "Body\n"
+   ],
+   "expected": {
+    "version": 2,
+    "type": "net.daringfireball.markdown",
+    "transient": false,
+    "creatorIdentifier": "md.obsidian",
+    "md.obsidian.textbundle-files": {
+     "version": 1,
+     "text": "d6a2533c"
+    }
+   }
+  },
+  {
+   "name": "A10 export info.json keeps the data of other apps",
+   "fn": "exportInfo",
+   "args": [
+    {
+     "version": 1,
+     "creatorIdentifier": "net.shinyfrog.bear",
+     "net.shinyfrog.bear": {
+      "version": 1,
+      "uuid": "X"
+     },
+     "md.obsidian.textbundle-files": {
+      "version": 1,
+      "text": "00000000"
+     }
+    },
+    "Body\n"
+   ],
+   "expected": {
+    "version": 2,
+    "type": "net.daringfireball.markdown",
+    "transient": false,
+    "creatorIdentifier": "net.shinyfrog.bear",
+    "net.shinyfrog.bear": {
+     "version": 1,
+     "uuid": "X"
+    },
+    "md.obsidian.textbundle-files": {
+     "version": 1,
+     "text": "d6a2533c"
+    }
+   }
+  },
+  {
+   "name": "A11 round trip of encoded unicode links gives the same text",
+   "fn": "roundTrip",
+   "args": [
+    "# Café\n\n![](assets/caf%C3%A9%20menu.png)\n![](<assets/b c.jpg>)\n[pdf](assets/r.pdf \"t\")\n",
+    {
+     "café menu.png": "Attachments/café menu.png",
+     "b c.jpg": "Attachments/b c.jpg",
+     "r.pdf": "Attachments/r.pdf"
+    }
+   ],
+   "expected": "# Café\n\n![](assets/caf%C3%A9%20menu.png)\n![](<assets/b c.jpg>)\n[pdf](assets/r.pdf \"t\")\n"
+  },
+  {
+   "name": "A11 round trip with CRLF line ends and an HTML img gives the same text",
+   "fn": "roundTrip",
+   "args": [
+    "Line\r\n<img src=\"assets/a.png\">\r\n",
+    {
+     "a.png": "Att/a.png"
+    }
+   ],
+   "expected": "Line\r\n<img src=\"assets/a.png\">\r\n"
+  },
+  {
+   "name": "A11 info property in flow form is taken out and the block goes away",
+   "fn": "takeInfoProperty",
+   "args": [
+    "---\ntextbundle: {\"version\":2,\"creatorIdentifier\":\"com.ulyssesapp.mac\"}\n---\nBody\n"
+   ],
+   "expected": {
+    "text": "Body\n",
+    "info": {
+     "version": 2,
+     "creatorIdentifier": "com.ulyssesapp.mac"
+    }
+   }
+  },
+  {
+   "name": "A11 info property in block YAML after a property edit is read",
+   "fn": "takeInfoProperty",
+   "args": [
+    "---\ntextbundle:\n  version: 2\n  type: net.daringfireball.markdown\n  com.ulyssesapp:\n    k: 1\ntags:\n  - a\n---\nBody\n"
+   ],
+   "expected": {
+    "text": "---\ntags:\n  - a\n---\nBody\n",
+    "info": {
+     "version": 2,
+     "type": "net.daringfireball.markdown",
+     "com.ulyssesapp": {
+      "k": 1
+     }
+    }
+   }
+  },
+  {
+   "name": "A11 info property that is not the first key is read and the other keys keep their bytes",
+   "fn": "takeInfoProperty",
+   "args": [
+    "---\ntags: [a]\ntextbundle: {\"version\":2}\nstatus: done\n---\nBody\n"
+   ],
+   "expected": {
+    "text": "---\ntags: [a]\nstatus: done\n---\nBody\n",
+    "info": {
+     "version": 2
+    }
+   }
+  },
+  {
+   "name": "A11 text without the info property does not change",
+   "fn": "takeInfoProperty",
+   "args": [
+    "---\ntags: a\n---\nBody\n"
+   ],
+   "expected": {
+    "text": "---\ntags: a\n---\nBody\n",
+    "info": null
+   }
+  },
+  {
+   "name": "A11 an existing textbundle key is found, so the importer adds no second key",
+   "fn": "hasInfoProperty",
+   "args": [
+    "---\ntitle: x\ntextbundle: old\n---\nBody"
+   ],
+   "expected": true
+  },
+  {
+   "name": "A11 a textbundle word in the body is not a property",
+   "fn": "hasInfoProperty",
+   "args": [
+    "Body\ntextbundle: x\n"
+   ],
+   "expected": false
+  },
+  {
+   "name": "A11 a UTF-8 byte order mark stays in the text",
+   "fn": "bundle",
+   "args": [
+    "Bom.textpack",
+    {
+     "text.md": "﻿A"
+    }
+   ],
+   "expected": {
+    "name": "Bom",
+    "textName": "text.md",
+    "text": "﻿A",
+    "type": "net.daringfireball.markdown",
+    "markdown": true,
+    "assets": [],
+    "warnings": [
+     "No info.json. Used the Markdown type."
+    ]
+   }
+  },
+  {
+   "name": "A13 links in fenced and inline code do not change",
+   "fn": "rewriteImportLinks",
+   "args": [
+    "```\n![](assets/a.png)\n```\n`![](assets/a.png)` ![](assets/a.png)\n",
+    {
+     "a.png": "A/a.png"
+    }
+   ],
+   "expected": {
+    "text": "```\n![](assets/a.png)\n```\n`![](assets/a.png)` ![](A/a.png)\n",
+    "rewritten": 1,
+    "missing": 0
+   }
+  },
+  {
+   "name": "A13 export leaves wikilinks in code",
+   "fn": "exportLinks",
+   "args": [
+    "~~~\n![[a.png]]\n~~~\n![[a.png]]",
+    {
+     "a.png": "a.png"
+    }
+   ],
+   "expected": {
+    "text": "~~~\n![[a.png]]\n~~~\n![](assets/a.png)",
+    "assets": [
+     {
+      "vaultPath": "a.png",
+      "name": "a.png"
+     }
+    ]
+   }
+  },
+  {
+   "name": "A8 stored entries that declare a smaller size are refused (overlap bomb)",
+   "fn": "bombPack",
+   "args": [
+    1000,
+    5,
+    false
+   ],
+   "expected": {
+    "error": "Refused the pack: the stored entry \"assets/a0.png\" declares two different sizes."
+   }
+  },
+  {
+   "name": "A8 entries that share one data block are refused",
+   "fn": "bombPack",
+   "args": [
+    1000,
+    5,
+    true
+   ],
+   "expected": {
+    "error": "Refused the pack: the entries \"assets/a0.png\" and \"assets/a1.png\" share data."
+   }
+  },
+  {
+   "name": "A8 the unpacked cap counts the compressed size of overlapping entries",
+   "fn": "bombPack",
+   "args": [
+    3145728,
+    120,
+    true
+   ],
+   "expected": {
+    "error": "The pack is 253 MB when unpacked. The limit is 250 MB."
+   }
+  },
+  {
+   "name": "A8 a ZIP64 locator with a second directory is refused (P11, 2 MB x 150)",
+   "fn": "zip64Pack",
+   "args": [
+    2097152,
+    150
+   ],
+   "expected": {
+    "error": "Refused the pack: ZIP64 packs are not supported."
+   }
+  },
+  {
+   "name": "A8 a ZIP64 locator with 6000 entries in a second directory is refused (P11b)",
+   "fn": "zip64Pack",
+   "args": [
+    40,
+    6000
+   ],
+   "expected": {
+    "error": "Refused the pack: ZIP64 packs are not supported."
+   }
+  },
+  {
+   "name": "A8 a deflate entry with a short declared size is refused, not cut",
+   "fn": "lyingPack",
+   "args": [],
+   "expected": {
+    "error": "Refused the pack: \"assets/a.png\" has more packed data than its declared size allows."
+   }
+  },
+  {
+   "name": "A8 a deflate stream that passes its declared size stops and is refused",
+   "fn": "lyingPack",
+   "args": [
+    50000
+   ],
+   "expected": {
+    "error": "Refused the pack: \"assets/a.png\" unpacks to more than its declared size."
+   }
+  },
+  {
+   "name": "A8 a declared size over 1032 times the packed size is refused before the unpack",
+   "fn": "inflateEntry",
+   "args": [
+    "assets/z.bin",
+    1000,
+    1100000
+   ],
+   "expected": {
+    "error": "Refused the pack: \"assets/z.bin\" declares 1100000 bytes for 1000 packed bytes."
+   }
+  },
+  {
+   "name": "A2 two entries with one path after cleaning are refused (R3-6b)",
+   "fn": "bundle",
+   "args": [
+    "Dup.textpack",
+    {
+     "text.md": "t",
+     "assets/a.png": "one",
+     "./assets/a.png": "two"
+    }
+   ],
+   "expected": {
+    "error": "Refused the pack: two entries have the path \"assets/a.png\"."
+   }
+  },
+  {
+   "name": "A2 two entries with one path after cleaning are refused (R3-6c)",
+   "fn": "bundle",
+   "args": [
+    "Dup.textpack",
+    {
+     "text.md": "t",
+     "assets/a.png": "one",
+     "assets//a.png": "two"
+    }
+   ],
+   "expected": {
+    "error": "Refused the pack: two entries have the path \"assets/a.png\"."
+   }
+  },
+  {
+   "name": "A2 two entries whose paths differ only in case are refused",
+   "fn": "bundle",
+   "args": [
+    "Dup.textpack",
+    {
+     "text.md": "t",
+     "assets/a.png": "one",
+     "assets/A.png": "two"
+    }
+   ],
+   "expected": {
+    "error": "Refused the pack: two entries have the path \"assets/A.png\"."
+   }
+  },
+  {
+   "name": "A5 asset name with a colon is made safe",
+   "fn": "assetName",
+   "args": [
+    "sub/a:b.png"
+   ],
+   "expected": "a b.png"
+  },
+  {
+   "name": "A5 asset name with a trailing space is made safe",
+   "fn": "assetName",
+   "args": [
+    "x "
+   ],
+   "expected": "x"
+  },
+  {
+   "name": "A5 asset name of dots only gets a fallback",
+   "fn": "assetName",
+   "args": [
+    "..."
+   ],
+   "expected": "asset"
+  },
+  {
+   "name": "A5 Windows device name gets an underscore",
+   "fn": "assetName",
+   "args": [
+    "con.png"
+   ],
+   "expected": "con_.png"
+  },
+  {
+   "name": "A5 Windows device name before the first dot gets an underscore",
+   "fn": "assetName",
+   "args": [
+    "nul.tar.gz"
+   ],
+   "expected": "nul_.tar.gz"
+  },
+  {
+   "name": "A5 Windows device name with two extensions gets an underscore",
+   "fn": "assetName",
+   "args": [
+    "con.backup.png"
+   ],
+   "expected": "con_.backup.png"
+  },
+  {
+   "name": "A5 a device name inside a longer name stays",
+   "fn": "assetName",
+   "args": [
+    "console.png"
+   ],
+   "expected": "console.png"
+  },
+  {
+   "name": "A5 Windows device name as a note name gets an underscore",
+   "fn": "noteName",
+   "args": [
+    "CON.textpack"
+   ],
+   "expected": "CON_"
+  },
+  {
+   "name": "A13 an indented code block keeps its links",
+   "fn": "rewriteImportLinks",
+   "args": [
+    "Text\n\n    ![x](assets/a.png)\n",
+    {
+     "a.png": "A/a.png"
+    }
+   ],
+   "expected": {
+    "text": "Text\n\n    ![x](assets/a.png)\n",
+    "rewritten": 0,
+    "missing": 0
+   }
+  },
+  {
+   "name": "A13 a fence inside a blockquote keeps its links",
+   "fn": "rewriteImportLinks",
+   "args": [
+    "> ```\n> ![q](assets/a.png)\n> ```\n> ![q](assets/a.png)",
+    {
+     "a.png": "A/a.png"
+    }
+   ],
+   "expected": {
+    "text": "> ```\n> ![q](assets/a.png)\n> ```\n> ![q](A/a.png)",
+    "rewritten": 1,
+    "missing": 0
+   }
+  },
+  {
+   "name": "A13 an indented image in a list item is not code and is rewritten",
+   "fn": "rewriteImportLinks",
+   "args": [
+    "- item\n\n    ![x](assets/a.png)\n",
+    {
+     "a.png": "A/a.png"
+    }
+   ],
+   "expected": {
+    "text": "- item\n\n    ![x](A/a.png)\n",
+    "rewritten": 1,
+    "missing": 0
+   }
+  },
+  {
+   "name": "A4 a hash in the attachment folder is encoded",
+   "fn": "rewriteImportLinks",
+   "args": [
+    "![](assets/a.png)",
+    {
+     "a.png": "C# notes/att/a.png"
+    }
+   ],
+   "expected": {
+    "text": "![](C%23%20notes/att/a.png)",
+    "rewritten": 1,
+    "missing": 0
+   }
+  },
+  {
+   "name": "A10 a pack exported by the plugin with the same text is skipped",
+   "fn": "exportedByPlugin",
+   "args": [
+    "{\"version\":2,\"md.obsidian.textbundle-files\":{\"version\":1,\"text\":\"d6a2533c\"}}",
+    "Body\n"
+   ],
+   "expected": true
+  },
+  {
+   "name": "A10 a marked pack whose text another app changed imports again",
+   "fn": "exportedByPlugin",
+   "args": [
+    "{\"version\":2,\"md.obsidian.textbundle-files\":{\"version\":1,\"text\":\"d6a2533c\"}}",
+    "Body edited in Bear\n"
+   ],
+   "expected": false
+  },
+  {
+   "name": "A10 a pack of another app is not marked",
+   "fn": "exportedByPlugin",
+   "args": [
+    "{\"version\":2,\"creatorIdentifier\":\"net.shinyfrog.bear\"}",
+    "Body\n"
+   ],
+   "expected": false
+  },
+  {
+   "name": "Note name drops the extension and unsafe characters",
+   "fn": "noteName",
+   "args": [
+    "Q3: plan #2 [draft].textpack"
+   ],
+   "expected": "Q3 plan 2 draft"
+  },
+  {
+   "name": "Note name of an empty name is Untitled",
+   "fn": "noteName",
+   "args": [
+    ".textbundle"
+   ],
+   "expected": "Untitled"
+  },
+  {
+   "name": "Note name keeps unicode",
+   "fn": "noteName",
+   "args": [
+    "Träume 日記.TEXTPACK"
+   ],
+   "expected": "Träume 日記"
+  },
+  {
+   "name": "Folder pick groups files by .textbundle folder",
+   "fn": "groupBundleFiles",
+   "args": [
+    [
+     "Export/A.textbundle/text.md",
+     "Export/A.textbundle/assets/x.png",
+     "Export/B.textbundle/text.markdown",
+     "Export/readme.txt"
+    ]
+   ],
+   "expected": [
+    {
+     "root": "Export/A.textbundle",
+     "files": [
+      {
+       "path": "Export/A.textbundle/text.md",
+       "rel": "text.md"
+      },
+      {
+       "path": "Export/A.textbundle/assets/x.png",
+       "rel": "assets/x.png"
+      }
+     ]
+    },
+    {
+     "root": "Export/B.textbundle",
+     "files": [
+      {
+       "path": "Export/B.textbundle/text.markdown",
+       "rel": "text.markdown"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

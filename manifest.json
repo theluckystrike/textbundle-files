@@ -1,0 +1,11 @@
+{
+	"id": "textbundle-files",
+	"name": "TextBundle Files",
+	"version": "1.0.0",
+	"minAppVersion": "1.13.4",
+	"description": "Imports TextBundle and TextPack files as notes with their images, and exports a note as a TextPack.",
+	"author": "Michael Lip",
+	"authorUrl": "https://github.com/theluckystrike",
+	"fundingUrl": "https://github.com/sponsors/theluckystrike",
+	"isDesktopOnly": false
+}

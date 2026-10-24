@@ -1,0 +1,80 @@
+[
+	{
+		"feature": "import-window",
+		"caption": "The import window takes .textpack files, a .textbundle folder, or a drop.",
+		"note": "Garden plan.md",
+		"eval": "(async () => { window.__tb = { p: app.plugins.plugins['textbundle-files'], dir: 'TextBundle Files/Packs/', file: async (name) => new File([new Uint8Array(await app.vault.adapter.readBinary('TextBundle Files/Packs/' + name))], name), open: async (path, mode = 'preview') => { document.querySelectorAll('.modal-container').forEach(el => el.remove()); const leaf = app.workspace.getLeaf(false); await leaf.setViewState({ type: 'markdown', state: { file: path, mode, source: mode === 'source' } }); }, pro: async () => { const p = app.plugins.plugins['textbundle-files']; if (!window.__tbHttp) window.__tbHttp = p.pro.opts.http; p.pro.opts.http = async () => ({ status: 200, json: { data: { viewer: { login: 'demo-reader' }, user: { sponsorshipForViewerAsSponsor: { isActive: true, isOneTimePayment: false, tier: { name: '$5 a month', monthlyPriceInCents: 500 } } } } } }); app.secretStorage.setSecret('textbundle-files-github-token', 'gho_' + '0'.repeat(36)); await p.pro.refreshNow(); }, free: () => { const p = app.plugins.plugins['textbundle-files']; p.pro.signOut(); if (window.__tbHttp) p.pro.opts.http = window.__tbHttp; } }; window.__tb.free(); window.__tb.p.openImport(); return 'Import window'; })()",
+		"zoom": 0.9
+	},
+	{
+		"feature": "import-result",
+		"caption": "Each pack becomes a note, and the window lists its attachments and changed links.",
+		"eval": "(async () => { const m = window.__tb.p.openImport(); const rows = await m.selectFiles([await window.__tb.file('Lisbon trip.textpack'), await window.__tb.file('Screenplay.textpack')]); if (!rows[0] || !rows[0].result) throw new Error(JSON.stringify(rows)); return rows.length + ' rows'; })()",
+		"zoom": 0.9
+	},
+	{
+		"feature": "imported-note",
+		"caption": "The imported note shows its images from the attachment folder.",
+		"eval": "(async () => { await window.__tb.open('Lisbon trip.md'); await new Promise(r => setTimeout(r, 900)); const n = document.querySelectorAll('.workspace-leaf.mod-active .markdown-reading-view img').length; if (n < 2) throw new Error('images: ' + n); return n + ' images'; })()",
+		"wait": 900,
+		"zoom": 0.85
+	},
+	{
+		"feature": "links",
+		"caption": "The links in the source point to the vault files.",
+		"eval": "(async () => { await window.__tb.open('Lisbon trip.md', 'source'); return 'Source'; })()",
+		"wait": 700
+	},
+	{
+		"feature": "unsafe-pack",
+		"caption": "A pack with a ../ path is refused, and nothing is written.",
+		"eval": "(async () => { const m = window.__tb.p.openImport(); const rows = await m.selectFiles([await window.__tb.file('Escape.textpack')]); if (!rows[0] || !rows[0].error) throw new Error('not refused'); return rows[0].error; })()",
+		"zoom": 0.9
+	},
+	{
+		"feature": "export",
+		"caption": "Export current note as TextPack writes the pack next to the note.",
+		"note": "Garden plan.md",
+		"eval": "(async () => { document.querySelectorAll('.modal-container').forEach(el => el.remove()); await new Promise(r => setTimeout(r, 300)); app.commands.executeCommandById('textbundle-files:export-note'); for (let i = 0; i < 50 && !app.vault.getAbstractFileByPath('TextBundle Files/Garden plan.textpack'); i++) await new Promise(r => setTimeout(r, 100)); if (!app.vault.getAbstractFileByPath('TextBundle Files/Garden plan.textpack')) throw new Error('no pack'); return 'Exported'; })()",
+		"wait": 400
+	},
+	{
+		"feature": "folder-import",
+		"caption": "Pro imports every pack in a folder and writes a report note.",
+		"eval": "(async () => { await window.__tb.pro(); document.querySelectorAll('.notice').forEach(el => el.remove()); const r = await window.__tb.p.importFolder(app.vault.getFolderByPath('TextBundle Files/Packs')); await window.__tb.open(r.reportPath); window.__tb.free(); return r.reportPath; })()",
+		"wait": 900
+	},
+	{
+		"feature": "settings",
+		"caption": "The settings: auto import of added packs, and the info.json property (Pro).",
+		"eval": "(async () => { app.setting.open(); app.setting.openTabById('textbundle-files'); await new Promise(r => setTimeout(r, 800)); return 'ok'; })()",
+		"after": "(async () => { app.setting.close(); return 'ok'; })()",
+		"wait": 700
+	},
+	{
+		"feature": "textbundle-files",
+		"caption": "Import a TextPack, open the note with its images, and export a note as a TextPack.",
+		"frames": [
+			{
+				"note": "Garden plan.md",
+				"eval": "(async () => { window.__tb = { p: app.plugins.plugins['textbundle-files'], dir: 'TextBundle Files/Packs/', file: async (name) => new File([new Uint8Array(await app.vault.adapter.readBinary('TextBundle Files/Packs/' + name))], name), open: async (path, mode = 'preview') => { document.querySelectorAll('.modal-container').forEach(el => el.remove()); const leaf = app.workspace.getLeaf(false); await leaf.setViewState({ type: 'markdown', state: { file: path, mode, source: mode === 'source' } }); }, pro: async () => { const p = app.plugins.plugins['textbundle-files']; if (!window.__tbHttp) window.__tbHttp = p.pro.opts.http; p.pro.opts.http = async () => ({ status: 200, json: { data: { viewer: { login: 'demo-reader' }, user: { sponsorshipForViewerAsSponsor: { isActive: true, isOneTimePayment: false, tier: { name: '$5 a month', monthlyPriceInCents: 500 } } } } } }); app.secretStorage.setSecret('textbundle-files-github-token', 'gho_' + '0'.repeat(36)); await p.pro.refreshNow(); }, free: () => { const p = app.plugins.plugins['textbundle-files']; p.pro.signOut(); if (window.__tbHttp) p.pro.opts.http = window.__tbHttp; } }; window.__tb.free(); window.__tb.p.openImport(); return 'Import window'; })()",
+				"zoom": 0.9,
+				"hold": 1600
+			},
+			{
+				"eval": "(async () => { const m = window.__tb.p.openImport(); await m.selectFiles([await window.__tb.file('Lisbon trip.textpack')]); return 'Imported'; })()",
+				"zoom": 0.9,
+				"hold": 1800
+			},
+			{
+				"eval": "(async () => { const f = app.vault.getMarkdownFiles().filter(f => /^Lisbon trip( \\d+)?\\.md$/.test(f.path)).sort((a, b) => b.stat.ctime - a.stat.ctime)[0]; await window.__tb.open(f.path); await new Promise(r => setTimeout(r, 900)); return f.path; })()",
+				"hold": 2200
+			},
+			{
+				"note": "Garden plan.md",
+				"eval": "(async () => { document.querySelectorAll('.modal-container').forEach(el => el.remove()); app.commands.executeCommandById('textbundle-files:export-note'); await new Promise(r => setTimeout(r, 600)); return 'Exported'; })()",
+				"hold": 2000
+			}
+		]
+	}
+]
