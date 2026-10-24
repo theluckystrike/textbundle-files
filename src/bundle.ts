@@ -32,7 +32,16 @@ export interface Bundle {
 	warnings: string[];
 }
 
-export class PackError extends Error {}
+/** Why a pack was refused. Code decides on the kind, never on the message text. */
+export type PackErrorKind = 'not-zip' | 'limit' | 'unsafe-path' | 'duplicate' | 'unsupported' | 'bomb' | 'corrupt' | 'no-text' | 'write-failed';
+
+export class PackError extends Error {
+	readonly kind: PackErrorKind;
+	constructor(kind: PackErrorKind, message: string) {
+		super(message);
+		this.kind = kind;
+	}
+}
 
 const MB = 1024 * 1024;
 const mb = (bytes: number) => `${Math.ceil(bytes / MB)} MB`;
@@ -52,7 +61,7 @@ export function checkLimits(packBytes: number, entries: number, unpackedBytes: n
 export function checkEntryPath(path: string): string {
 	const slashed = path.replace(/\\/g, '/');
 	if (slashed.includes('\0') || slashed.startsWith('/') || /^[A-Za-z]:/.test(slashed) || slashed.split('/').includes('..')) {
-		throw new PackError(`Refused the pack: the path "${path}" points outside the bundle.`);
+		throw new PackError('unsafe-path', `Refused the pack: the path "${path}" points outside the bundle.`);
 	}
 	return slashed.split('/').filter((part) => part !== '' && part !== '.').join('/');
 }
@@ -158,7 +167,7 @@ export function bundleFromFiles(fileName: string, input: Record<string, Uint8Arr
 		const clean = checkEntryPath(path);
 		if (!clean || path.endsWith('/') || IGNORED.test(clean)) continue;
 		// "assets/a.png", "./assets/a.png" and "assets/A.png" are one file on most disks: refuse, do not pick one.
-		if (seen.has(clean.toLowerCase())) throw new PackError(`Refused the pack: two entries have the path "${clean}".`);
+		if (seen.has(clean.toLowerCase())) throw new PackError('duplicate', `Refused the pack: two entries have the path "${clean}".`);
 		seen.add(clean.toLowerCase());
 		files.set(clean, bytes);
 	}
@@ -167,7 +176,7 @@ export function bundleFromFiles(fileName: string, input: Record<string, Uint8Arr
 	if (![...files.keys()].some(isText)) {
 		const tops = new Set([...files.keys()].filter((path) => path.includes('/')).map((path) => path.slice(0, path.indexOf('/') + 1)));
 		const candidates = [...tops].filter((top) => [...files.keys()].some((path) => path.startsWith(top) && isText(path.slice(top.length))));
-		if (candidates.length !== 1) throw new PackError('No text file (text.markdown or text.md) in the bundle.');
+		if (candidates.length !== 1) throw new PackError('no-text', 'No text file (text.markdown or text.md) in the bundle.');
 		prefix = candidates[0]!;
 	}
 	const inner = new Map<string, Uint8Array>();
@@ -231,7 +240,7 @@ export function scanZip(bytes: Uint8Array): ZipEntry[] {
 	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 	const u16 = (at: number) => view.getUint16(at, true);
 	const u32 = (at: number) => view.getUint32(at, true);
-	const bad = () => new PackError('not a zip');
+	const bad = () => new PackError('not-zip', 'not a zip');
 	let end = -1;
 	for (let at = bytes.length - 22; at >= Math.max(0, bytes.length - 22 - 65535); at--) {
 		if (u32(at) === 0x06054b50) {
@@ -243,14 +252,14 @@ export function scanZip(bytes: Uint8Array): ZipEntry[] {
 	const count = u16(end + 10);
 	const cdSize = u32(end + 12);
 	const cdOffset = u32(end + 16);
-	const zip64 = new PackError('Refused the pack: ZIP64 packs are not supported.');
+	const zip64 = new PackError('unsupported', 'Refused the pack: ZIP64 packs are not supported.');
 	if (count === 0xffff || cdOffset === 0xffffffff) throw zip64;
 	// A ZIP64 locator before the end record, or a ZIP64 end record after the directory, would make other readers use a second directory.
 	if (end >= 20 && u32(end - 20) === 0x07064b50) throw zip64;
 	for (let at = cdOffset + cdSize; at + 4 <= end; at++) if (u32(at) === 0x06064b50 || u32(at) === 0x07064b50) throw zip64;
 	if (cdOffset + cdSize > end) throw bad();
 	const limit = checkLimits(bytes.length, count, 0);
-	if (limit) throw new PackError(limit);
+	if (limit) throw new PackError('limit', limit);
 	const entries: Array<ZipEntry & { start: number; stop: number }> = [];
 	const names = new Set<string>();
 	let unpacked = 0;
@@ -261,28 +270,28 @@ export function scanZip(bytes: Uint8Array): ZipEntry[] {
 		const nameLength = u16(at + 28);
 		const raw = bytes.subarray(at + 46, at + 46 + nameLength);
 		const name = flags & 2048 ? new TextDecoder().decode(raw) : Array.from(raw, (b) => String.fromCharCode(b)).join('');
-		if (flags & 1) throw new PackError(`Refused the pack: the entry "${name}" is encrypted.`);
+		if (flags & 1) throw new PackError('unsupported', `Refused the pack: the entry "${name}" is encrypted.`);
 		const entry = { name, method: u16(at + 10), crc: u32(at + 16), compressed: u32(at + 20), size: u32(at + 24), data: 0, start: 0, stop: 0 };
 		const offset = u32(at + 42);
 		at += 46 + nameLength + u16(at + 30) + u16(at + 32);
-		if (entry.compressed === 0xffffffff || entry.size === 0xffffffff || offset === 0xffffffff) throw new PackError('Refused the pack: ZIP64 packs are not supported.');
+		if (entry.compressed === 0xffffffff || entry.size === 0xffffffff || offset === 0xffffffff) throw new PackError('unsupported', 'Refused the pack: ZIP64 packs are not supported.');
 		if (offset + 30 > bytes.length || u32(offset) !== 0x04034b50) throw bad();
-		if (entry.method !== 0 && entry.method !== 8) throw new PackError(`Refused the pack: the entry "${name}" uses compression method ${entry.method}.`);
+		if (entry.method !== 0 && entry.method !== 8) throw new PackError('unsupported', `Refused the pack: the entry "${name}" uses compression method ${entry.method}.`);
 		entry.start = offset;
 		entry.data = offset + 30 + u16(offset + 26) + u16(offset + 28);
 		entry.stop = entry.data + entry.compressed;
-		if (entry.stop > cdOffset) throw new PackError(`Refused the pack: the entry "${name}" is larger than the pack.`);
-		if (entry.method === 0 && entry.compressed !== entry.size) throw new PackError(`Refused the pack: the stored entry "${name}" declares two different sizes.`);
-		if (names.has(name)) throw new PackError(`Refused the pack: two entries have the name "${name}".`);
+		if (entry.stop > cdOffset) throw new PackError('bomb', `Refused the pack: the entry "${name}" is larger than the pack.`);
+		if (entry.method === 0 && entry.compressed !== entry.size) throw new PackError('bomb', `Refused the pack: the stored entry "${name}" declares two different sizes.`);
+		if (names.has(name)) throw new PackError('duplicate', `Refused the pack: two entries have the name "${name}".`);
 		names.add(name);
 		unpacked += Math.max(entry.compressed, entry.size);
 		const over = checkLimits(bytes.length, count, unpacked);
-		if (over) throw new PackError(over);
+		if (over) throw new PackError('limit', over);
 		entries.push(entry);
 	}
 	const sorted = [...entries].sort((a, b) => a.start - b.start);
 	for (let i = 1; i < sorted.length; i++) {
-		if (sorted[i]!.start < sorted[i - 1]!.stop) throw new PackError(`Refused the pack: the entries "${sorted[i - 1]!.name}" and "${sorted[i]!.name}" share data.`);
+		if (sorted[i]!.start < sorted[i - 1]!.stop) throw new PackError('bomb', `Refused the pack: the entries "${sorted[i - 1]!.name}" and "${sorted[i]!.name}" share data.`);
 	}
 	return entries.map(({ name, method, crc, compressed, size, data }) => ({ name, method, crc, compressed, size, data }));
 }
@@ -298,8 +307,8 @@ const CHUNK = 16 * 1024;
  * and not much smaller than stored deflate blocks allow.
  */
 export function inflateEntry(entry: Pick<ZipEntry, 'name' | 'compressed' | 'size'>, packed: Uint8Array): Uint8Array {
-	if (entry.size > entry.compressed * MAX_RATIO + 1024) throw new PackError(`Refused the pack: "${entry.name}" declares ${entry.size} bytes for ${entry.compressed} packed bytes.`);
-	if (entry.compressed > entry.size + Math.ceil(entry.size / 16383) * 5 + 64) throw new PackError(`Refused the pack: "${entry.name}" has more packed data than its declared size allows.`);
+	if (entry.size > entry.compressed * MAX_RATIO + 1024) throw new PackError('bomb', `Refused the pack: "${entry.name}" declares ${entry.size} bytes for ${entry.compressed} packed bytes.`);
+	if (entry.compressed > entry.size + Math.ceil(entry.size / 16383) * 5 + 64) throw new PackError('bomb', `Refused the pack: "${entry.name}" has more packed data than its declared size allows.`);
 	const out = new Uint8Array(entry.size);
 	let at = 0;
 	let over = false;
@@ -316,9 +325,9 @@ export function inflateEntry(entry: Pick<ZipEntry, 'name' | 'compressed' | 'size
 		if (packed.length === 0) inflater.push(packed, true);
 		for (let i = 0; i < packed.length && !over; i += CHUNK) inflater.push(packed.subarray(i, i + CHUNK), i + CHUNK >= packed.length);
 	} catch {
-		throw new PackError(`Refused the pack: "${entry.name}" does not unpack.`);
+		throw new PackError('corrupt', `Refused the pack: "${entry.name}" does not unpack.`);
 	}
-	if (over) throw new PackError(`Refused the pack: "${entry.name}" unpacks to more than its declared size.`);
+	if (over) throw new PackError('bomb', `Refused the pack: "${entry.name}" unpacks to more than its declared size.`);
 	return at === entry.size ? out : out.subarray(0, at);
 }
 
@@ -329,13 +338,13 @@ export function inflateEntry(entry: Pick<ZipEntry, 'name' | 'compressed' | 'size
  */
 export function readPack(fileName: string, bytes: Uint8Array): Bundle {
 	const early = checkLimits(bytes.length, 0, 0);
-	if (early) throw new PackError(early);
+	if (early) throw new PackError('limit', early);
 	let entries: ZipEntry[];
 	try {
 		entries = scanZip(bytes);
 	} catch (error) {
-		if (error instanceof PackError && error.message !== 'not a zip') throw error;
-		throw new PackError(`${fileName} is not a TextPack (zip) file.`);
+		if (error instanceof PackError && error.kind !== 'not-zip') throw error;
+		throw new PackError('not-zip', `${fileName} is not a TextPack (zip) file.`);
 	}
 	const files: Record<string, Uint8Array> = {};
 	for (const entry of entries) {
@@ -343,7 +352,7 @@ export function readPack(fileName: string, bytes: Uint8Array): Bundle {
 		if (entry.name.endsWith('/')) continue;
 		const packed = bytes.subarray(entry.data, entry.data + entry.compressed);
 		const out = entry.method === 0 ? packed.slice() : inflateEntry(entry, packed);
-		if (out.length !== entry.size || crc32(out) !== entry.crc) throw new PackError(`Refused the pack: "${entry.name}" does not match its declared size or checksum.`);
+		if (out.length !== entry.size || crc32(out) !== entry.crc) throw new PackError('corrupt', `Refused the pack: "${entry.name}" does not match its declared size or checksum.`);
 		files[entry.name] = out;
 	}
 	return bundleFromFiles(fileName, files);

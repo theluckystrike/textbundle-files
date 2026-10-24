@@ -1,7 +1,7 @@
 {
 	"id": "textbundle-files",
 	"name": "TextBundle Files",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"minAppVersion": "1.13.4",
 	"description": "Imports TextBundle and TextPack files as notes with their images, and exports a note as a TextPack.",
 	"author": "Michael Lip",

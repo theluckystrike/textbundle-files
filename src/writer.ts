@@ -91,7 +91,7 @@ export async function writeBundle(app: App, bundle: Bundle, source: string, fold
 				// The file stays. The message below names the import.
 			}
 		}
-		throw new PackError(`${source} was not imported, and its new files went to the trash. ${error instanceof Error ? error.message : String(error)}`);
+		throw new PackError('write-failed', `${source} was not imported, and its new files went to the trash. ${error instanceof Error ? error.message : String(error)}`);
 	}
 }
 
@@ -104,7 +104,7 @@ export async function readVaultBundle(app: App, folder: TFolder): Promise<Bundle
 			if (child instanceof TFolder) await walk(child, `${prefix}${child.name}/`);
 			else if (child instanceof TFile) {
 				total += child.stat.size;
-				if (total > MAX_UNPACKED_BYTES) throw new PackError(`${folder.name} is larger than ${MAX_UNPACKED_BYTES / 1024 / 1024} MB.`);
+				if (total > MAX_UNPACKED_BYTES) throw new PackError('limit', `${folder.name} is larger than ${MAX_UNPACKED_BYTES / 1024 / 1024} MB.`);
 				files[`${prefix}${child.name}`] = new Uint8Array(await app.vault.readBinary(child));
 			}
 		}
@@ -117,7 +117,7 @@ export async function readVaultBundle(app: App, folder: TFolder): Promise<Bundle
 export async function readVaultPack(app: App, file: TFile): Promise<Bundle> {
 	// Check the size before the file is read into memory.
 	const limit = checkLimits(file.stat.size, 0, 0);
-	if (limit) throw new PackError(limit);
+	if (limit) throw new PackError('limit', limit);
 	return readPack(file.name, new Uint8Array(await app.vault.readBinary(file)));
 }
 
@@ -137,7 +137,7 @@ export async function exportNote(app: App, file: TFile, keepInfo: boolean, folde
 		const target = app.vault.getFileByPath(asset.vaultPath);
 		if (!target) continue;
 		total += target.stat.size;
-		if (total > MAX_UNPACKED_BYTES) throw new PackError(`The attachments of ${file.basename} are larger than ${MAX_UNPACKED_BYTES / 1024 / 1024} MB.`);
+		if (total > MAX_UNPACKED_BYTES) throw new PackError('limit', `The attachments of ${file.basename} are larger than ${MAX_UNPACKED_BYTES / 1024 / 1024} MB.`);
 		assets.push({ name: asset.name, bytes: new Uint8Array(await app.vault.readBinary(target)) });
 	}
 	const pack = buildPack(file.basename, links.text, exportInfo(stored, links.text), assets);

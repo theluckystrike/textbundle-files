@@ -1,5 +1,11 @@
 # textbundle-files
 
+## 1.0.3
+
+### Patch Changes
+
+- No visible change. The retry for a pack that a sync still writes now uses the error kind, not the error message text.
+
 ## 1.0.2
 
 ### Patch Changes

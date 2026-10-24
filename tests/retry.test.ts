@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { strToU8, zipSync } from 'fflate';
 import { App } from 'obsidian-test-mocks/obsidian';
 
-const state = vi.hoisted(() => ({ scans: 0, writes: 0, mode: 'refused' as 'refused' | 'transient' | 'syncing' | 'unsafe', notices: [] as string[] }));
+const state = vi.hoisted(() => ({ scans: 0, writes: 0, mode: 'refused' as 'refused' | 'transient' | 'syncing' | 'unsafe' | 'kind', kind: 'not-zip' as import('../src/bundle').PackErrorKind, message: '', notices: [] as string[] }));
 
 vi.mock('obsidian', async (original) => {
 	const real = await original<typeof import('obsidian')>();
@@ -21,7 +21,7 @@ vi.mock('obsidian', async (original) => {
 
 vi.mock('../src/writer', async (original) => {
 	const real = await original<typeof import('../src/writer')>();
-	const { readPack } = await import('../src/bundle');
+	const { PackError, readPack } = await import('../src/bundle');
 	return {
 		...real,
 		readVaultPack: vi.fn(async (_app: unknown, file: { name: string; stat: { size: number } }) => {
@@ -32,6 +32,8 @@ vi.mock('../src/writer', async (original) => {
 			if (state.mode === 'unsafe') return readPack(file.name, zipSync({ 'text.md': strToU8('Note\n'), '../evil.md': strToU8('x') }));
 			// A pack that a sync still writes: only the first stat.size bytes of the full zip are there.
 			if (state.mode === 'syncing') return readPack(file.name, FULL.subarray(0, file.stat.size));
+			// 1.0.3: a PackError with a set kind and a set message text.
+			if (state.mode === 'kind') throw new PackError(state.kind, state.message);
 			if (state.scans === 1) throw new Error('EBUSY: the file is still open');
 			return readPack(file.name, zipSync({ 'text.md': strToU8(`Note ${file.name}\n`) }));
 		}),
@@ -236,5 +238,55 @@ describe('auto import retry (1.0.2)', () => {
 		expect(state.scans).toBe(2);
 		expect(run.done).toBe(true);
 		expect(run.result).toMatchObject({ notePath: 'Synced/syncing.textpack.md' });
+	});
+	// 1.0.3: the retry decision uses the PackError kind, not the message text.
+	const KINDS = ['not-zip', 'limit', 'unsafe-path', 'duplicate', 'unsupported', 'bomb', 'corrupt', 'no-text', 'write-failed'] as const;
+
+	it('arms the 60 s wait only for the not-zip kind', async () => {
+		state.mode = 'kind';
+		for (const kind of KINDS) {
+			state.kind = kind;
+			state.message = `Synced/${kind}.textpack is not a TextPack (zip) file.`;
+			state.notices = [];
+			const run = await start(`Synced/${kind}.textpack`);
+			await vi.advanceTimersByTimeAsync(STABLE_WAIT + 100);
+			expect(run.done).toBe(true);
+			if (kind === 'not-zip') {
+				// Armed: no Notice yet, one 60 s timer, and a modify with a new size gives one more scan.
+				expect(state.notices).toEqual([]);
+				expect(vi.getTimerCount()).toBe(1);
+				run.plugin.onunload();
+			} else {
+				expect(state.notices).toEqual([`Synced/${kind}.textpack was not imported. Synced/${kind}.textpack is not a TextPack (zip) file.`]);
+				expect(vi.getTimerCount()).toBe(0);
+			}
+		}
+	});
+
+	it('the retry decision does not depend on the message text', async () => {
+		state.mode = 'kind';
+		// A not-zip refusal with a changed message text still waits 60 s and retries on modify.
+		state.kind = 'not-zip';
+		state.message = 'A new text for a pack with no zip end record.';
+		const run = await start('Synced/new-text.textpack', 'x'.repeat(40));
+		await vi.advanceTimersByTimeAsync(STABLE_WAIT + 100);
+		expect(state.notices).toEqual([]);
+		expect(vi.getTimerCount()).toBe(1);
+		state.mode = 'syncing';
+		run.file.stat.size = FULL.length;
+		run.plugin.onModify(run.file);
+		await vi.advanceTimersByTimeAsync(STABLE_WAIT + 100);
+		expect(state.scans).toBe(2);
+		expect(state.writes).toBe(1);
+		expect(state.notices).toEqual(['Imported Synced/new-text.textpack.md with 0 attachments.']);
+		// The old not-zip text on another kind does not arm the wait.
+		state.mode = 'kind';
+		state.kind = 'corrupt';
+		state.message = 'Synced/old-text.textpack is not a TextPack (zip) file.';
+		state.notices = [];
+		await start('Synced/old-text.textpack');
+		await vi.advanceTimersByTimeAsync(STABLE_WAIT + 100);
+		expect(state.notices).toEqual(['Synced/old-text.textpack was not imported. Synced/old-text.textpack is not a TextPack (zip) file.']);
+		expect(vi.getTimerCount()).toBe(0);
 	});
 });

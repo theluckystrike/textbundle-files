@@ -39,8 +39,11 @@ export interface FolderReport {
 }
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
-/** True for the refusal of a file with no zip end record. A writer adds the end record last, so the pack may still be incomplete. */
-const incomplete = (error: unknown) => error instanceof PackError && error.message.endsWith(' is not a TextPack (zip) file.');
+/**
+ * True for a pack refused with the kind 'not-zip' (no zip end record, or a bad zip directory).
+ * A writer adds the end record last, so the pack may still be incomplete. The check uses the kind, not the message text.
+ */
+export const incomplete = (error: unknown) => error instanceof PackError && error.kind === 'not-zip';
 
 export default class TextbundleFilesPlugin extends Plugin {
 	settings: TextbundleFilesSettings = { ...DEFAULT_SETTINGS };
@@ -298,7 +301,7 @@ export default class TextbundleFilesPlugin extends Plugin {
 		} catch (error) {
 			const file = this.app.vault.getFileByPath(path);
 			if (this.unloaded) return null;
-			// Only "not a TextPack (zip) file" (no zip end record) can mean a pack that a writer has not finished.
+			// Only the kind 'not-zip' (no zip end record) can mean a pack that a writer has not finished.
 			// Every other refusal (bomb, unsafe path, limit, no text file) shows its Notice at once.
 			if (incomplete(error) && !again && file) {
 				// The pack may still be syncing. Wait for its next 'modify' event, and show the Notice only if none comes in 60 s.
