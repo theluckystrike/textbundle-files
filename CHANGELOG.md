@@ -1,5 +1,13 @@
 # textbundle-files
 
+## 1.0.4
+
+### Patch Changes
+
+- If you are not signed in or do not sponsor, folder import and export show a Sponsor on GitHub button.
+- The Sponsor on GitHub buttons add the plugin id to the GitHub address, so a sponsorship shows its source.
+- If GitHub has said you sponsor, or your first check still runs, no Sponsor button shows.
+
 ## 1.0.3
 
 ### Patch Changes

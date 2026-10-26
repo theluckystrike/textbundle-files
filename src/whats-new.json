@@ -1,9 +1,11 @@
 {
 	"id": "textbundle-files",
 	"name": "TextBundle Files",
-	"version": "1.0.3",
+	"version": "1.0.4",
 	"changes": [
-		"No visible change. The retry for a pack that a sync still writes now uses the error kind, not the error message text."
+		"If you are not signed in or do not sponsor, folder import and export show a Sponsor on GitHub button.",
+		"The Sponsor on GitHub buttons add the plugin id to the GitHub address, so a sponsorship shows its source.",
+		"If GitHub has said you sponsor, or your first check still runs, no Sponsor button shows."
 	],
 	"tip": "On desktop, you can drop .textpack files and .textbundle folders on the import window. To send a note to Bear, Ulysses or iA Writer, use Export current note as TextPack.",
 	"thanks": "Hi, I am Michael, a solo developer in Poland. TextBundle Files is one of over 100 small plugins that I make. Thank you for trusting it with your notes.",

@@ -196,8 +196,52 @@ describe('TextBundle Files in a vault', () => {
 			}
 			return { errors, report: app.vault.getAbstractFileByPath('TextBundle import report.md') !== null };
 		});
-		expect(state.errors).toEqual(['Folder import and folder export need Pro. Sign in with GitHub in the plugin settings.', 'Folder import and folder export need Pro. Sign in with GitHub in the plugin settings.']);
+		expect(state.errors).toEqual(['Pro imports every pack in a folder, or exports every note of a folder, in one step. Sponsor on GitHub, then sign in from the plugin settings.', 'Pro imports every pack in a folder, or exports every note of a folder, in one step. Sponsor on GitHub, then sign in from the plugin settings.']);
 		expect(state.report).toBe(false);
+	});
+
+	it('the Pro notice shows a Sponsor button with metadata_source to a free user, and nothing to a sponsor', async () => {
+		const state = await browser.executeObsidian(async ({ app }) => {
+			const plugin = (app as unknown as { plugins: { plugins: Record<string, TestPlugin> } }).plugins.plugins['textbundle-files']!;
+			const commands = (app as unknown as { commands: { executeCommandById(id: string): boolean } }).commands;
+			const opened: string[] = [];
+			const realOpen = window.open;
+			window.open = ((url?: string | URL) => {
+				opened.push(String(url));
+				return null;
+			}) as typeof window.open;
+			const previousHttp = plugin.pro.opts.http;
+			const buttons = () => [...document.querySelectorAll('.notice .pf-pro-notice-sponsor')];
+			try {
+				document.querySelectorAll('.notice').forEach((n) => n.remove());
+				plugin.pro.signOut();
+				commands.executeCommandById('textbundle-files:import-folder');
+				const freeText = [...document.querySelectorAll('.notice')].map((n) => n.textContent ?? '').join('|');
+				const freeButtons = buttons().length;
+				(buttons()[0] as HTMLElement | undefined)?.click();
+				document.querySelectorAll('.notice').forEach((n) => n.remove());
+				document.querySelectorAll('.modal-container').forEach((m) => m.remove());
+				plugin.pro.opts.http = async () => ({ status: 200, json: { data: { viewer: { login: 'demo-reader' }, user: { sponsorshipForViewerAsSponsor: { isActive: true, isOneTimePayment: false, tier: { name: '$5 a month', monthlyPriceInCents: 500 } } } } } });
+				app.secretStorage.setSecret('textbundle-files-github-token', 'gho_' + '0'.repeat(36));
+				await plugin.pro.refreshNow();
+				commands.executeCommandById('textbundle-files:import-folder');
+				const sponsorText = [...document.querySelectorAll('.notice')].map((n) => n.textContent ?? '').join('|');
+				const sponsorButtons = buttons().length;
+				const picker = document.querySelector('.modal-container .prompt') !== null;
+				document.querySelectorAll('.modal-container').forEach((m) => m.remove());
+				return { freeText, freeButtons, opened, sponsorText, sponsorButtons, picker };
+			} finally {
+				window.open = realOpen;
+				plugin.pro.signOut();
+				plugin.pro.opts.http = previousHttp;
+			}
+		});
+		expect(state.freeText).toContain('Pro imports every pack in a folder, or exports every note of a folder, in one step. Sponsor on GitHub, then sign in from the plugin settings.');
+		expect(state.freeButtons).toBe(1);
+		expect(state.opened).toEqual(['https://github.com/sponsors/theluckystrike?metadata_source=textbundle-files']);
+		expect(state.sponsorText).not.toMatch(/sponsor on github/i);
+		expect(state.sponsorButtons).toBe(0);
+		expect(state.picker).toBe(true);
 	});
 
 	it('Pro imports a folder of packs with a report and keeps info.json for the round trip', async () => {

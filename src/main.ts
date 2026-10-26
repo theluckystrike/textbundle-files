@@ -1,6 +1,6 @@
 import { FuzzySuggestModal, Notice, Plugin, TFile, TFolder, normalizePath, type App, type TAbstractFile } from 'obsidian';
 import type { SponsorsManager } from './license/index';
-import { createGitHubSponsors } from './license/github-obsidian';
+import { createGitHubSponsors, proNeededText, showProNotice } from './license/github-obsidian';
 import { setupHello } from './hello/index';
 import WHATS_NEW from './whats-new.json';
 import { SPONSORS, bindPro, isPro, resetPro } from './pro';
@@ -30,7 +30,8 @@ const UI = {
 	importFolder: 'Import packs in this folder (Pro)',
 	exportFolder: 'Export notes as TextPacks (Pro)',
 };
-export const PRO_NEEDED = 'Folder import and folder export need Pro. Sign in with GitHub in the plugin settings.';
+/** The first sentence of the Pro gate. proNeededText adds the next step: sponsor, then sign in (or Refresh for a signed-in user). */
+export const PRO_NEEDED = 'Pro imports every pack in a folder, or exports every note of a folder, in one step.';
 
 export interface FolderReport {
 	reportPath: string;
@@ -163,7 +164,7 @@ export default class TextbundleFilesPlugin extends Plugin {
 	/** Pro: imports each pack and bundle in the folder and writes a report note. */
 	async importFolder(folder: TFolder): Promise<FolderReport> {
 		// Check the cached Sponsors state at the write boundary.
-		if (!isPro()) throw new Error(PRO_NEEDED);
+		if (!isPro()) throw new Error(proNeededText(this.pro, PRO_NEEDED));
 		const lines: string[] = [];
 		let done = 0;
 		let failed = 0;
@@ -184,7 +185,7 @@ export default class TextbundleFilesPlugin extends Plugin {
 
 	/** Pro: exports each note of the folder and its subfolders into a new TextPacks folder. */
 	async exportFolder(folder: TFolder): Promise<FolderReport> {
-		if (!isPro()) throw new Error(PRO_NEEDED);
+		if (!isPro()) throw new Error(proNeededText(this.pro, PRO_NEEDED));
 		const notes = notesIn(folder);
 		const taken = (path: string) => this.app.vault.getAbstractFileByPath(path) !== null;
 		const out = uniquePath(normalizePath(folder.isRoot() ? 'TextPacks' : `${folder.path}/TextPacks`), taken);
@@ -339,6 +340,10 @@ export default class TextbundleFilesPlugin extends Plugin {
 	}
 
 	async folderWithNotice(job: () => Promise<FolderReport>): Promise<void> {
+		if (!isPro()) {
+			showProNotice(this.pro, PRO_NEEDED);
+			return;
+		}
 		try {
 			const report = await job();
 			new Notice(`Done: ${report.done}, failed: ${report.failed}. See ${report.reportPath}.`);
@@ -351,7 +356,7 @@ export default class TextbundleFilesPlugin extends Plugin {
 
 	private pickFolder(onPick: (folder: TFolder) => void): void {
 		if (!isPro()) {
-			new Notice(PRO_NEEDED);
+			showProNotice(this.pro, PRO_NEEDED);
 			return;
 		}
 		new FolderPicker(this.app, onPick).open();
