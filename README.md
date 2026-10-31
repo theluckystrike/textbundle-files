@@ -78,7 +78,7 @@ After a minor or major update, this plugin opens one What's new tab in the backg
 
 To sign in and enable Pro:
 
-1. Sponsor via [GitHub Sponsors](https://github.com/sponsors/theluckystrike?metadata_source=textbundle-files). A total payment of $15 meets the payment requirement for Pro without further payment. Sign-in and the checks below still apply.
+1. Sponsor via [GitHub Sponsors](https://github.com/sponsors/theluckystrike?frequency=one-time&metadata_source=textbundle-files). A total payment of $15 meets the payment requirement for Pro without further payment. Sign-in and the checks below still apply.
 2. In Obsidian, open the settings of TextBundle Files and select "Sign in with GitHub".
 3. The plugin copies a code and opens github.com/login/device. Paste the code there and approve.
 
@@ -98,7 +98,7 @@ The text goes into a note as it is, without link changes. The window shows the t
 
 The core features are free. Pro features need a GitHub Sponsors sponsorship of theluckystrike: $5 a month or more, or $15 once. A total payment of $15 meets the payment requirement for Pro without further payment. Sign-in and the checks below still apply. Your notes stay readable and editable with or without Pro.
 
-GitHub handles the payment. Sponsor at https://github.com/sponsors/theluckystrike. You need no account for the free features. Pro needs the GitHub account that sponsors.
+GitHub handles the payment. Sponsor at https://github.com/sponsors/theluckystrike?frequency=one-time&metadata_source=textbundle-files. You need no account for the free features. Pro needs the GitHub account that sponsors.
 
 Until you select "Sign in with GitHub" in the settings, TextBundle Files makes no network requests. Sign in uses the GitHub device flow. TextBundle Files sends its public client ID and the scope `read:user` to `https://github.com/login/device/code` and shows you a code. While you enter the code at https://github.com/login/device, it asks `https://github.com/login/oauth/access_token` every few seconds to check the sign-in status. The scope permits profile reads only. GitHub needs this access to show the sponsorship tier. It grants no repository scope and no write access.
 
