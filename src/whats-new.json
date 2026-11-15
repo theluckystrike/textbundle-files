@@ -1,7 +1,7 @@
 {
 	"id": "textbundle-files",
 	"name": "TextBundle Files",
-	"version": "1.0.5",
+	"version": "1.0.6",
 	"changes": [
 		"The Pro notice of TextBundle Files now says that one payment turns on Pro in every NoteMods plugin."
 	],

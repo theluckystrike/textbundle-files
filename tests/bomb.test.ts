@@ -4,6 +4,7 @@ import { constants, deflateRawSync, inflateRawSync } from 'node:zlib';
 import { readPack } from '../src/bundle';
 import { deflatedZip } from './zipcraft';
 import { ROUNDS, pairedRatio } from './growth';
+import { budget } from './time-scale';
 
 /**
  * One MiB of zeros as raw deflate (level 9), cut with a full flush: the segment ends on a byte boundary and no later
@@ -75,7 +76,7 @@ describe('CPU bombs (R3-10)', () => {
 			// so the baseline over the refusal falls below 1. The guard asks for more than 10.
 			const r = pairedRatio(quiet(refuse), quiet(stop));
 			expect(r.ratio, `${r.text}: 200 MB unpack against refusal`).toBeGreaterThan(10);
-		}, 120_000);
+		}, budget(120_000));
 	}
 
 	it('stops the stream at the declared size when the size fits the ratio: 4 GB and 1 GB of zeros declared as 50 MB take about the same time', () => {
@@ -96,5 +97,5 @@ describe('CPU bombs (R3-10)', () => {
 			four = Math.min(four, b.ms);
 		}
 		expect(four / one, `${four.toFixed(1)} ms for 4 GB, ${one.toFixed(1)} ms for 1 GB`).toBeLessThan(2);
-	}, 120_000);
+	}, budget(120_000));
 });

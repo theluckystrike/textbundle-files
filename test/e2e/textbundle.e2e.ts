@@ -238,7 +238,7 @@ describe('TextBundle Files in a vault', () => {
 		});
 		expect(state.freeText).toContain('Pro imports every pack in a folder, or exports every note of a folder, in one step. One payment turns on Pro in every NoteMods plugin. Sponsor on GitHub, then sign in from the plugin settings.');
 		expect(state.freeButtons).toBe(1);
-		expect(state.opened).toEqual(['https://github.com/sponsors/theluckystrike?frequency=one-time&metadata_source=textbundle-files-all']);
+		expect(state.opened).toEqual(['https://github.com/sponsors/theluckystrike/sponsorships?tier_id=666162&frequency=one-time&metadata_source=textbundle-files-all']);
 		expect(state.sponsorText).not.toMatch(/sponsor on github/i);
 		expect(state.sponsorButtons).toBe(0);
 		expect(state.picker).toBe(true);

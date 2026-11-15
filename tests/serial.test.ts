@@ -3,6 +3,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { strToU8, zipSync } from 'fflate';
 import { App } from 'obsidian-test-mocks/obsidian';
+import { budget } from './time-scale';
 
 const state = vi.hoisted(() => ({ active: 0, max: 0, unpacks: 0, writes: 0 }));
 
@@ -43,5 +44,5 @@ describe('auto import queue (1.0.1)', () => {
 		expect(state.unpacks).toBe(10);
 		expect(state.writes).toBe(10);
 		expect(state.max).toBe(1);
-	}, 30_000);
+	}, budget(30_000));
 });
